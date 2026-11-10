@@ -6,7 +6,10 @@ A small Go CLI (macOS only) that works with TextEdit.
 
 ```sh
 textedit open
+textedit open --today
 ```
+
+`open --today` opens (creating it if needed) `~/textedit/yyyy-mm-dd/⠀.rtf` in TextEdit.
 
 ## Install
 
