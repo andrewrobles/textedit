@@ -15,7 +15,7 @@ textedit save
 
 `commit` stages all changes in `~/textedit` (which must be a git repo) and commits them with an empty message.
 
-`save` copies `~/textedit/⠀.rtf` to `~/textedit/yyyymmddThhmmss.rtf` (ISO 8601 basic timestamp), resets `⠀.rtf` to the starter content, runs `commit`, then closes and reopens `⠀.rtf` in TextEdit.
+`save` copies `~/textedit/⠀.rtf` to `~/textedit/yyyy-mm-ddThh:mm:ss.rtf` (ISO 8601 timestamp), resets `⠀.rtf` to the starter content, runs `commit`, then closes and reopens `⠀.rtf` in TextEdit.
 
 ## Install
 

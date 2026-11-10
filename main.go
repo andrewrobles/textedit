@@ -103,8 +103,7 @@ func save() error {
 	if err != nil {
 		return err
 	}
-	// Basic ISO 8601 format: colons are awkward in macOS file names.
-	archive := filepath.Join(base, time.Now().Format("20060102T150405")+".rtf")
+	archive := filepath.Join(base, time.Now().Format("2006-01-02T15:04:05")+".rtf")
 	if err := os.WriteFile(archive, data, 0o644); err != nil {
 		return err
 	}
