@@ -7,9 +7,12 @@ A small Go CLI (macOS only) that works with TextEdit.
 ```sh
 textedit open
 textedit open --today
+textedit commit
 ```
 
 `open --today` opens (creating it if needed) `~/textedit/yyyy-mm-dd/⠀.rtf` in TextEdit.
+
+`commit` stages all changes in `~/textedit` (which must be a git repo) and commits them with an empty message.
 
 ## Install
 

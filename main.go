@@ -14,17 +14,20 @@ import (
 const fileName = "\u2800.rtf"
 
 func main() {
-	today := false
+	var err error
 	switch {
 	case len(os.Args) == 2 && os.Args[1] == "open":
+		err = open(false)
 	case len(os.Args) == 3 && os.Args[1] == "open" && os.Args[2] == "--today":
-		today = true
+		err = open(true)
+	case len(os.Args) == 2 && os.Args[1] == "commit":
+		err = commit()
 	default:
-		fmt.Fprintln(os.Stderr, "usage: textedit open [--today]")
+		fmt.Fprintln(os.Stderr, "usage: textedit open [--today] | textedit commit")
 		os.Exit(2)
 	}
 
-	if err := open(today); err != nil {
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
@@ -54,13 +57,20 @@ func createIfMissing(path string) error {
 	return f.Close()
 }
 
-func open(today bool) error {
+func baseDir() (string, error) {
 	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "textedit"), nil
+}
+
+func open(today bool) error {
+	base, err := baseDir()
 	if err != nil {
 		return err
 	}
 
-	base := filepath.Join(home, "textedit")
 	path := filepath.Join(base, fileName)
 	if today {
 		dir := filepath.Join(base, time.Now().Format("2006-01-02"))
@@ -77,6 +87,29 @@ func open(today bool) error {
 
 	if out, err := exec.Command("open", "-a", "TextEdit", path).CombinedOutput(); err != nil {
 		return fmt.Errorf("opening %s: %w\n%s", path, err, out)
+	}
+	return nil
+}
+
+// commit stages all changes in the textedit directory and commits them with an empty message.
+func commit() error {
+	base, err := baseDir()
+	if err != nil {
+		return err
+	}
+
+	if err := git(base, "add", "--all"); err != nil {
+		return err
+	}
+	return git(base, "commit", "--allow-empty-message", "--message", "")
+}
+
+func git(dir string, args ...string) error {
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git %s: %w", args[0], err)
 	}
 	return nil
 }
