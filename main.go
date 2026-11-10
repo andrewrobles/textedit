@@ -22,8 +22,10 @@ func main() {
 		err = open(true)
 	case len(os.Args) == 2 && os.Args[1] == "commit":
 		err = commit()
+	case len(os.Args) == 2 && os.Args[1] == "save":
+		err = save()
 	default:
-		fmt.Fprintln(os.Stderr, "usage: textedit open [--today] | textedit commit")
+		fmt.Fprintln(os.Stderr, "usage: textedit open [--today] | textedit commit | textedit save")
 		os.Exit(2)
 	}
 
@@ -85,6 +87,56 @@ func open(today bool) error {
 		return err
 	}
 
+	return openInTextEdit(path)
+}
+
+// save archives the source RTF file to a timestamped copy, resets the source to the
+// starter content, commits, and reloads the source in TextEdit.
+func save() error {
+	base, err := baseDir()
+	if err != nil {
+		return err
+	}
+
+	source := filepath.Join(base, fileName)
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	// Basic ISO 8601 format: colons are awkward in macOS file names.
+	archive := filepath.Join(base, time.Now().Format("20060102T150405")+".rtf")
+	if err := os.WriteFile(archive, data, 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(source, []byte(starterContent), 0o644); err != nil {
+		return err
+	}
+
+	// Close without saving so TextEdit doesn't write its stale contents back.
+	if err := closeInTextEdit(source); err != nil {
+		return err
+	}
+	if err := commit(); err != nil {
+		return err
+	}
+	return openInTextEdit(source)
+}
+
+const closeScript = `on run argv
+	set p to item 1 of argv
+	if application "TextEdit" is running then
+		tell application "TextEdit" to close (every document whose path is p) saving no
+	end if
+end run`
+
+func closeInTextEdit(path string) error {
+	if out, err := exec.Command("osascript", "-e", closeScript, path).CombinedOutput(); err != nil {
+		return fmt.Errorf("closing %s: %w\n%s", path, err, out)
+	}
+	return nil
+}
+
+func openInTextEdit(path string) error {
 	if out, err := exec.Command("open", "-a", "TextEdit", path).CombinedOutput(); err != nil {
 		return fmt.Errorf("opening %s: %w\n%s", path, err, out)
 	}
