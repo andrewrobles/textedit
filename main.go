@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,6 +13,9 @@ import (
 
 // The file name is a single braille blank character (U+2800) followed by ".rtf".
 const fileName = "\u2800.rtf"
+
+//go:embed usage.txt
+var usage string
 
 func main() {
 	var err error
@@ -25,7 +29,7 @@ func main() {
 	case len(os.Args) == 2 && os.Args[1] == "save":
 		err = save()
 	default:
-		fmt.Fprintln(os.Stderr, "usage: textedit open [--today] | textedit commit | textedit save")
+		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
 	}
 
