@@ -1,0 +1,6 @@
+USAGE: textedit <command>
+
+COMMANDS:
+    open [--today]
+    commit
+    save [title]

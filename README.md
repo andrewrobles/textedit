@@ -4,8 +4,10 @@ A small Go CLI (macOS only) that works with TextEdit.
 
 ## Usage
 
+Simply use the `textedit` command to get list of supported commands in ther terminal:
+
 ```sh
-textedit open
+textedit
 ```
 
 ## Install
