@@ -17,9 +17,13 @@ const fileName = "\u2800.rtf"
 //go:embed usage.txt
 var usage string
 
+const version = "0.0.2"
+
 func main() {
 	var err error
 	switch {
+	case len(os.Args) == 2 && (os.Args[1] == "-v" || os.Args[1] == "--version"):
+		fmt.Println(version)
 	case len(os.Args) == 2 && os.Args[1] == "open":
 		err = open(false)
 	case len(os.Args) == 3 && os.Args[1] == "open" && os.Args[2] == "--today":
