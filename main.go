@@ -27,7 +27,9 @@ func main() {
 	case len(os.Args) == 2 && os.Args[1] == "commit":
 		err = commit()
 	case len(os.Args) == 2 && os.Args[1] == "save":
-		err = save()
+		err = save("")
+	case len(os.Args) == 3 && os.Args[1] == "save":
+		err = save(os.Args[2])
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
@@ -94,9 +96,10 @@ func open(today bool) error {
 	return openInTextEdit(path)
 }
 
-// save archives the source RTF file to a timestamped copy, resets the source to the
-// starter content, commits, and reloads the source in TextEdit.
-func save() error {
+// save archives the source RTF file, resets the source to the starter content, commits,
+// and reloads the source in TextEdit. With a title the archive is <yyyy-mm-dd>/<title>.rtf;
+// otherwise it is a timestamped copy in the base directory.
+func save(title string) error {
 	base, err := baseDir()
 	if err != nil {
 		return err
@@ -107,8 +110,23 @@ func save() error {
 	if err != nil {
 		return err
 	}
-	archive := filepath.Join(base, time.Now().Format("2006-01-02T15:04:05")+".rtf")
-	if err := os.WriteFile(archive, data, 0o644); err != nil {
+
+	now := time.Now()
+	archive := filepath.Join(base, now.Format("2006-01-02T15:04:05")+".rtf")
+	flags := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+	if title != "" {
+		if title == "." || title == ".." || title != filepath.Base(title) {
+			return fmt.Errorf("invalid title %q", title)
+		}
+		dir := filepath.Join(base, now.Format("2006-01-02"))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+		archive = filepath.Join(dir, title+".rtf")
+		// Never overwrite an earlier save with the same title.
+		flags = os.O_CREATE | os.O_EXCL | os.O_WRONLY
+	}
+	if err := writeFile(archive, data, flags); err != nil {
 		return err
 	}
 	if err := os.WriteFile(source, []byte(starterContent), 0o644); err != nil {
@@ -123,6 +141,18 @@ func save() error {
 		return err
 	}
 	return openInTextEdit(source)
+}
+
+func writeFile(path string, data []byte, flags int) error {
+	f, err := os.OpenFile(path, flags, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 const closeScript = `on run argv

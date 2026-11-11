@@ -3,5 +3,4 @@ USAGE: textedit <command>
 COMMANDS:
     open [--today]
     commit
-    save
-
+    save [title]
