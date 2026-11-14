@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"time"
 )
 
@@ -17,7 +19,7 @@ const fileName = "\u2800.rtf"
 //go:embed usage.txt
 var usage string
 
-const version = "0.0.2"
+const version = "0.0.3"
 
 func main() {
 	var err error
@@ -100,9 +102,9 @@ func open(today bool) error {
 	return openInTextEdit(path)
 }
 
-// save archives the source RTF file, resets the source to the starter content, commits,
-// and reloads the source in TextEdit. With a title the archive is <yyyy-mm-dd>/<title>.rtf;
-// otherwise it is a timestamped copy in the base directory.
+// save moves the source RTF file's contents into the dated directory, resets the source to
+// the starter content, commits, and reloads the source in TextEdit. With a title the contents
+// are saved as <yyyy-mm-dd>/<title>.rtf; otherwise they are appended to <yyyy-mm-dd>/<fileName>.
 func save(title string) error {
 	base, err := baseDir()
 	if err != nil {
@@ -116,21 +118,20 @@ func save(title string) error {
 	}
 
 	now := time.Now()
-	archive := filepath.Join(base, now.Format("2006-01-02T15:04:05")+".rtf")
-	flags := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
-	if title != "" {
-		if title == "." || title == ".." || title != filepath.Base(title) {
-			return fmt.Errorf("invalid title %q", title)
-		}
-		dir := filepath.Join(base, now.Format("2006-01-02"))
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-		archive = filepath.Join(dir, title+".rtf")
-		// Never overwrite an earlier save with the same title.
-		flags = os.O_CREATE | os.O_EXCL | os.O_WRONLY
+	dir := filepath.Join(base, now.Format("2006-01-02"))
+	if title != "" && (title == "." || title == ".." || title != filepath.Base(title)) {
+		return fmt.Errorf("invalid title %q", title)
 	}
-	if err := writeFile(archive, data, flags); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if title == "" {
+		err = appendFile(source, filepath.Join(dir, fileName))
+	} else {
+		// Never overwrite an earlier save with the same title.
+		err = writeFile(filepath.Join(dir, title+".rtf"), data, os.O_CREATE|os.O_EXCL|os.O_WRONLY)
+	}
+	if err != nil {
 		return err
 	}
 	if err := os.WriteFile(source, []byte(starterContent), 0o644); err != nil {
@@ -145,6 +146,58 @@ func save(title string) error {
 		return err
 	}
 	return openInTextEdit(source)
+}
+
+// rtfBodyStart matches the paragraph/font control words that open an RTF body,
+// e.g. `\f0\fs24 \cf0 `.
+var rtfBodyStart = regexp.MustCompile(`^(?:\\[a-zA-Z]+-?[0-9]*[ ]?)+`)
+
+// rtfBody returns the text of an RTF document without its header, leading
+// formatting control words, or closing brace.
+func rtfBody(doc []byte) ([]byte, error) {
+	_, rest, found := bytes.Cut(doc, []byte("\n\n"))
+	if !found {
+		return nil, errors.New("no blank line separating the RTF header from the body")
+	}
+	rest = bytes.TrimRight(rest, " \t\r\n")
+	if !bytes.HasSuffix(rest, []byte("}")) {
+		return nil, errors.New("RTF document does not end with }")
+	}
+	rest = rest[:len(rest)-1]
+	return rest[len(rtfBodyStart.Find(rest)):], nil
+}
+
+// appendFile appends the body of the RTF file at source to the RTF file at
+// destination, starting on a new line.
+func appendFile(source, destination string) error {
+	src, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	body, err := rtfBody(src)
+	if err != nil {
+		return fmt.Errorf("%s: %w", source, err)
+	}
+
+	dst, err := os.ReadFile(destination)
+	// A missing or body-less destination (e.g. the starter content) is replaced by the source.
+	if errors.Is(err, fs.ErrNotExist) || (err == nil && !bytes.Contains(dst, []byte("\n\n"))) {
+		return os.WriteFile(destination, src, 0o644)
+	}
+	if err != nil {
+		return err
+	}
+	dst = bytes.TrimRight(dst, " \t\r\n")
+	if !bytes.HasSuffix(dst, []byte("}")) {
+		return fmt.Errorf("%s: RTF document does not end with }", destination)
+	}
+	dst = dst[:len(dst)-1]
+
+	// A backslash followed by a newline is an RTF paragraph break.
+	out := append(dst, "\\\n"...)
+	out = append(out, body...)
+	out = append(out, '}')
+	return os.WriteFile(destination, out, 0o644)
 }
 
 func writeFile(path string, data []byte, flags int) error {
