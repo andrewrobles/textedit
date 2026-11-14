@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"time"
 )
 
@@ -145,6 +147,54 @@ func save(title string) error {
 		return err
 	}
 	return openInTextEdit(source)
+}
+
+// rtfBodyStart matches the paragraph/font control words that open an RTF body,
+// e.g. `\f0\fs24 \cf0 `.
+var rtfBodyStart = regexp.MustCompile(`^(?:\\[a-zA-Z]+-?[0-9]*[ ]?)+`)
+
+// rtfBody returns the text of an RTF document without its header, leading
+// formatting control words, or closing brace.
+func rtfBody(doc []byte) ([]byte, error) {
+	_, rest, found := bytes.Cut(doc, []byte("\n\n"))
+	if !found {
+		return nil, errors.New("no blank line separating the RTF header from the body")
+	}
+	rest = bytes.TrimRight(rest, " \t\r\n")
+	if !bytes.HasSuffix(rest, []byte("}")) {
+		return nil, errors.New("RTF document does not end with }")
+	}
+	rest = rest[:len(rest)-1]
+	return rest[len(rtfBodyStart.Find(rest)):], nil
+}
+
+// appendFile appends the body of the RTF file at source to the RTF file at
+// destination, starting on a new line.
+func appendFile(source, destination string) error {
+	src, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	dst, err := os.ReadFile(destination)
+	if err != nil {
+		return err
+	}
+
+	body, err := rtfBody(src)
+	if err != nil {
+		return fmt.Errorf("%s: %w", source, err)
+	}
+	dst = bytes.TrimRight(dst, " \t\r\n")
+	if !bytes.HasSuffix(dst, []byte("}")) {
+		return fmt.Errorf("%s: RTF document does not end with }", destination)
+	}
+	dst = dst[:len(dst)-1]
+
+	// A backslash followed by a newline is an RTF paragraph break.
+	out := append(dst, "\\\n"...)
+	out = append(out, body...)
+	out = append(out, '}')
+	return os.WriteFile(destination, out, 0o644)
 }
 
 func writeFile(path string, data []byte, flags int) error {
