@@ -19,7 +19,7 @@ const fileName = "\u2800.rtf"
 //go:embed usage.txt
 var usage string
 
-const version = "0.0.2"
+const version = "0.0.3"
 
 func main() {
 	var err error
