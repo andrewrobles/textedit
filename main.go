@@ -102,9 +102,9 @@ func open(today bool) error {
 	return openInTextEdit(path)
 }
 
-// save archives the source RTF file, resets the source to the starter content, commits,
-// and reloads the source in TextEdit. With a title the archive is <yyyy-mm-dd>/<title>.rtf;
-// otherwise it is a timestamped copy in the base directory.
+// save moves the source RTF file's contents into the dated directory, resets the source to
+// the starter content, commits, and reloads the source in TextEdit. With a title the contents
+// are saved as <yyyy-mm-dd>/<title>.rtf; otherwise they are appended to <yyyy-mm-dd>/<fileName>.
 func save(title string) error {
 	base, err := baseDir()
 	if err != nil {
@@ -118,21 +118,20 @@ func save(title string) error {
 	}
 
 	now := time.Now()
-	archive := filepath.Join(base, now.Format("2006-01-02T15:04:05")+".rtf")
-	flags := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
-	if title != "" {
-		if title == "." || title == ".." || title != filepath.Base(title) {
-			return fmt.Errorf("invalid title %q", title)
-		}
-		dir := filepath.Join(base, now.Format("2006-01-02"))
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-		archive = filepath.Join(dir, title+".rtf")
-		// Never overwrite an earlier save with the same title.
-		flags = os.O_CREATE | os.O_EXCL | os.O_WRONLY
+	dir := filepath.Join(base, now.Format("2006-01-02"))
+	if title != "" && (title == "." || title == ".." || title != filepath.Base(title)) {
+		return fmt.Errorf("invalid title %q", title)
 	}
-	if err := writeFile(archive, data, flags); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if title == "" {
+		err = appendFile(source, filepath.Join(dir, fileName))
+	} else {
+		// Never overwrite an earlier save with the same title.
+		err = writeFile(filepath.Join(dir, title+".rtf"), data, os.O_CREATE|os.O_EXCL|os.O_WRONLY)
+	}
+	if err != nil {
 		return err
 	}
 	if err := os.WriteFile(source, []byte(starterContent), 0o644); err != nil {
@@ -175,14 +174,18 @@ func appendFile(source, destination string) error {
 	if err != nil {
 		return err
 	}
-	dst, err := os.ReadFile(destination)
-	if err != nil {
-		return err
-	}
-
 	body, err := rtfBody(src)
 	if err != nil {
 		return fmt.Errorf("%s: %w", source, err)
+	}
+
+	dst, err := os.ReadFile(destination)
+	// A missing or body-less destination (e.g. the starter content) is replaced by the source.
+	if errors.Is(err, fs.ErrNotExist) || (err == nil && !bytes.Contains(dst, []byte("\n\n"))) {
+		return os.WriteFile(destination, src, 0o644)
+	}
+	if err != nil {
+		return err
 	}
 	dst = bytes.TrimRight(dst, " \t\r\n")
 	if !bytes.HasSuffix(dst, []byte("}")) {

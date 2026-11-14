@@ -37,3 +37,48 @@ func TestAppendFile(t *testing.T) {
 		t.Errorf("destination contents do not match expected.rtf\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+func TestAppendFileMissingDestination(t *testing.T) {
+	source := filepath.Join("test", "source.rtf")
+	destination := filepath.Join(t.TempDir(), "destination.rtf")
+
+	if err := appendFile(source, destination); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("destination = %q, want a copy of source %q", got, want)
+	}
+}
+
+func TestAppendFileStarterDestination(t *testing.T) {
+	source := filepath.Join("test", "source.rtf")
+	destination := filepath.Join(t.TempDir(), "destination.rtf")
+	if err := os.WriteFile(destination, []byte(starterContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := appendFile(source, destination); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("destination = %q, want a copy of source %q", got, want)
+	}
+}
