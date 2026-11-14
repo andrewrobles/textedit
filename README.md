@@ -23,3 +23,19 @@ To try it without installing:
 ```sh
 go run . open
 ```
+
+## Test
+
+Run all tests from the repository root:
+
+```sh
+go test ./...
+```
+
+To run a single test with verbose output:
+
+```sh
+go test -run TestAppendFile -v
+```
+
+The tests read their RTF fixtures from the `test/` directory.
